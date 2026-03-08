@@ -46,6 +46,8 @@ Instead of losing conversations or rebuilding prompts, you can:
 ✔ Resume projects instantly
 ✔ Build a reusable prompt library
 
+<img width="1457" height="731" alt="Screenshot 2026-03-09 at 1 55 35 AM" src="https://github.com/user-attachments/assets/d2d13779-e169-4601-86b0-e6f3b1de7631" />
+
 ---
 
 # 🧠 The Problems AI Users Hit
@@ -60,11 +62,16 @@ Instead of losing conversations or rebuilding prompts, you can:
 
 **Context OS removes these frictions.**
 
+<img width="2721" height="1478" alt="NotebookLM Image" src="https://github.com/user-attachments/assets/c5ea6926-3a72-4a89-980e-fb7a3de3d48b" />
+
 ---
 
 # 🧰 Core Features
 
 The app is organized into **three main sections**.
+
+<img width="2733" height="1498" alt="NotebookLM Image (1)" src="https://github.com/user-attachments/assets/c3e6cd3c-a4fe-4c11-bfc2-2278c71301c2" />
+
 
 ---
 
