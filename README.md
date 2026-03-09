@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚡ Context OS
+# 🧠 Meet Context OS
 
 ### The missing layer between **you and your AI tools**
 
@@ -14,9 +14,11 @@ Portable AI context for any model, any chat, any workflow.
 [![AI Powered](https://img.shields.io/badge/AI-Gemini%201.5%20Flash-4ade80.svg)](https://aistudio.google.com)
 [![Hosting](https://img.shields.io/badge/Hosting-Free-f97316.svg)](https://vercel.com)
 
-**[Live Demo](https://context-os-jade.vercel.app/)** •
-**[Report Bug](https://github.com/Vibhor-choudhary/context-os/issues)** •
-**[Request Feature](https://github.com/Vibhor-choudhary/context-os/issues)**
+<p align="center">
+  <a href="https://context-os-jade.vercel.app/"><strong>🌐 Explore the Live App</strong></a> ·
+  <a href="https://github.com/Vibhor-choudhary/context-os/issues">🐞 Report an Issue</a> ·
+  <a href="https://github.com/Vibhor-choudhary/context-os/issues">✨ Suggest a Feature</a>
+</p>
 
 </div>
 
