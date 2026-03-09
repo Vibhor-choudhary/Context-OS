@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── CONSTANTS ─────────────────────────────────────────────────────────────────
 const TOKEN_LIMITS = {
@@ -469,10 +469,13 @@ function LibraryTab({ customPrompts, setCustomPrompts, apiKey, openSaveModal }) 
 
       {/* Custom prompts count */}
       {customPrompts.length > 0 && (
-        <div style={{ marginBottom: "14px", padding: "8px 12px", background: "#04100a", border: "1px solid #0a2a16", borderRadius: "7px", fontSize: "10px", color: "#2d6040", fontFamily: mono, display: "flex", alignItems: "center", gap: "8px" }}>
+        <div style={{ marginBottom: "14px", padding: "8px 12px", background: "#04100a", border: "1px solid #0a2a16", borderRadius: "7px", fontSize: "10px", color: "#2d6040", fontFamily: mono, display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <span style={{ color: "#4ade80" }}>◈</span>
-          {customPrompts.length} custom prompt{customPrompts.length !== 1 ? "s" : ""} saved in your library
-          <span style={{ color: "#1a3024" }}>· stored in session memory</span>
+          <span>{customPrompts.length} custom prompt{customPrompts.length !== 1 ? "s" : ""} saved</span>
+          <span style={{ color: "#1a3024" }}>·</span>
+          <span style={{ color: "#1e3a28" }}>persisted in localStorage — survives refresh & browser restart</span>
+          <span style={{ color: "#1a3024" }}>·</span>
+          <span style={{ color: "#1e3a28" }}>use ↓ Export in the top bar to back up or move to another device</span>
         </div>
       )}
 
@@ -881,13 +884,84 @@ function WorkflowsTab() {
   );
 }
 
+// ─── STORAGE HELPERS ───────────────────────────────────────────────────────────
+const LS_PROMPTS = "contextos_prompts_v1";
+const LS_APIKEY  = "contextos_apikey_v1";
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(LS_PROMPTS);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveToStorage(prompts) {
+  try { localStorage.setItem(LS_PROMPTS, JSON.stringify(prompts)); } catch {}
+}
+
+function loadApiKey() {
+  try { return localStorage.getItem(LS_APIKEY) || ""; } catch { return ""; }
+}
+
+function saveApiKey(key) {
+  try { localStorage.setItem(LS_APIKEY, key); } catch {}
+}
+
+function exportLibrary(prompts) {
+  const data = {
+    version: 1,
+    exported: new Date().toISOString(),
+    prompts,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `context-os-library-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importLibrary(file, onSuccess, onError) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      // Accept both raw array and wrapped {prompts:[]} format
+      const prompts = Array.isArray(data) ? data : data.prompts;
+      if (!Array.isArray(prompts)) throw new Error("Invalid format");
+      // Sanitise: strip builtin flag, re-assign IDs to avoid collisions
+      const sanitised = prompts.map((p, i) => ({
+        ...p,
+        id: Date.now() + i,
+        builtin: false,
+        accent: CATEGORY_ACCENTS[p.category] || "#f472b6",
+      }));
+      onSuccess(sanitised);
+    } catch (err) { onError(err.message); }
+  };
+  reader.readAsText(file);
+}
+
 // ─── ROOT APP ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState("library");
-  const [apiKey, setApiKey] = useState("");
-  const [customPrompts, setCustomPrompts] = useState([]);
-  const [saveModal, setSaveModal] = useState(null); // null | { prefill: string | null }
+  const [apiKey, setApiKey] = useState(() => loadApiKey());
+  const [customPrompts, setCustomPrompts] = useState(() => loadFromStorage());
+  const [saveModal, setSaveModal] = useState(null);
   const [toast, setToast] = useState(null);
+  const [importErr, setImportErr] = useState("");
+  const importRef = useRef(null);
+
+  // ── Persist prompts to localStorage on every change ──
+  useEffect(() => {
+    saveToStorage(customPrompts);
+  }, [customPrompts]);
+
+  // ── Persist API key on every change ──
+  useEffect(() => {
+    saveApiKey(apiKey);
+  }, [apiKey]);
 
   const showToast = (msg, color = "#4ade80") => {
     setToast({ msg, color });
@@ -907,9 +981,35 @@ export default function App() {
     showToast(`"${data.title}" saved to library ✓`);
   };
 
-  // Called from tools with a pre-filled prompt string
   const openSaveWithPrefill = (promptText) => {
     setSaveModal({ prefill: promptText });
+  };
+
+  const handleExport = () => {
+    if (customPrompts.length === 0) { showToast("No saved prompts to export", "#f87171"); return; }
+    exportLibrary(customPrompts);
+    showToast(`Exported ${customPrompts.length} prompt${customPrompts.length !== 1 ? "s" : ""} ✓`);
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportErr("");
+    importLibrary(
+      file,
+      (imported) => {
+        setCustomPrompts(prev => {
+          // Merge: skip duplicates by title
+          const existing = new Set(prev.map(p => p.title));
+          const fresh = imported.filter(p => !existing.has(p.title));
+          return [...fresh, ...prev];
+        });
+        showToast(`Imported ${imported.length} prompt${imported.length !== 1 ? "s" : ""} ✓`);
+      },
+      (err) => { showToast(`Import failed: ${err}`, "#f87171"); }
+    );
+    // Reset input so the same file can be re-imported
+    e.target.value = "";
   };
 
   const tabs = [
@@ -936,6 +1036,15 @@ export default function App() {
         button { cursor: pointer; }
       `}</style>
 
+      {/* Hidden file input for import */}
+      <input
+        ref={importRef}
+        type="file"
+        accept=".json"
+        onChange={handleImport}
+        style={{ display: "none" }}
+      />
+
       {/* Top bar */}
       <div style={{ borderBottom: "1px solid #0f0f2a", padding: "0 32px", background: "#04040f", display: "flex", alignItems: "stretch", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", paddingRight: "28px", borderRight: "1px solid #0f0f2a", marginRight: "20px" }}>
@@ -951,15 +1060,40 @@ export default function App() {
             <span style={{ fontSize: "9px", color: tab === t.id ? "#22d3ee50" : "#1e1e3a", letterSpacing: "1px" }}>{t.meta}</span>
           </button>
         ))}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "16px" }}>
-          {/* Global save button */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* Import */}
+          <button
+            onClick={() => importRef.current?.click()}
+            title="Import library from JSON file"
+            style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 12px", background: "transparent", border: "1px solid #1e1e3a", borderRadius: "6px", color: "#374151", fontSize: "10px", fontFamily: mono, cursor: "pointer", letterSpacing: "0.8px", transition: "all 0.2s" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "#a78bfa"; e.currentTarget.style.color = "#a78bfa"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "#1e1e3a"; e.currentTarget.style.color = "#374151"; }}>
+            ↑ Import
+          </button>
+          {/* Export */}
+          <button
+            onClick={handleExport}
+            title={`Export your ${customPrompts.length} saved prompt${customPrompts.length !== 1 ? "s" : ""} as JSON`}
+            style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 12px", background: "transparent", border: "1px solid #1e1e3a", borderRadius: "6px", color: "#374151", fontSize: "10px", fontFamily: mono, cursor: "pointer", letterSpacing: "0.8px", transition: "all 0.2s" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "#22d3ee"; e.currentTarget.style.color = "#22d3ee"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "#1e1e3a"; e.currentTarget.style.color = "#374151"; }}>
+            ↓ Export{customPrompts.length > 0 ? ` (${customPrompts.length})` : ""}
+          </button>
+          {/* Divider */}
+          <div style={{ width: "1px", height: "20px", background: "#1e1e3a" }} />
+          {/* Save to Library */}
           <button onClick={() => setSaveModal({ prefill: null })}
             style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 14px", background: "#4ade8012", border: "1px solid #4ade8040", borderRadius: "6px", color: "#4ade80", fontSize: "10px", fontFamily: mono, cursor: "pointer", letterSpacing: "0.8px", transition: "all 0.2s" }}
             onMouseEnter={e => e.currentTarget.style.background = "#4ade8020"}
             onMouseLeave={e => e.currentTarget.style.background = "#4ade8012"}>
             <span style={{ fontSize: "13px" }}>⊕</span> Save to Library
           </button>
-          <span style={{ fontSize: "9px", color: "#16163a", letterSpacing: "1.5px", fontFamily: mono }}>CLAUDE·GPT·GEMINI·LLAMA</span>
+          {/* Storage indicator */}
+          <div title="Prompts are saved to your browser's localStorage — they persist across refreshes"
+            style={{ display: "flex", alignItems: "center", gap: "5px", padding: "0 8px", borderLeft: "1px solid #0f0f2a", height: "100%" }}>
+            <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#4ade80", boxShadow: "0 0 5px #4ade8088" }} />
+            <span style={{ fontSize: "9px", color: "#1e3024", letterSpacing: "1px", fontFamily: mono }}>LOCAL</span>
+          </div>
         </div>
       </div>
 
